@@ -17,7 +17,7 @@ def parse_args():
   parser.add_argument("style", type=str, help="Path of the style image (must be .jpg or .png format)")
   parser.add_argument("method", choices=["wct", "gaussian", "gmmot-bary", "gmmot-rand"], help="Feature transform type to use for style transfer")
   parser.add_argument("--out", type=str, default="outputs", help="Directory where stylized results will be saved (default: ./outputs/)")
-  parser.add_argument("--alpha", type=int, default=0.2, help="Balance between the original content and stylized features (0 to 1, default: 0.2)")
+  parser.add_argument("--alpha", type=float, default=0.2, help="Balance between the original content and stylized features (0 to 1, default: 0.2)")
   parser.add_argument("--K", type=int, default=2, help="Number of Gaussian components for GMM-OT (default: 2)")
   return parser.parse_args()
 
