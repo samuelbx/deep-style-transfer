@@ -1,6 +1,7 @@
 demo/
 logs.txt
 nohup.txt
+generate_graphs.ipynb
 
 deep-transfer.iml
 

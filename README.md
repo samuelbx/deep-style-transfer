@@ -59,4 +59,8 @@ Gaussian-OT for many pairs:
 
 ![](./results/gaussian.png)
 
-To be added: GMM-OT for `K=5` and `K=10` and many pairs.
+Barycentric GMM-OT for `K=5` gaussian components:
+
+![](./results/gmmot-bary-K5.png)
+
+To be added: Barycentric & random GMM-OT for `K=5` and `K=10`.
