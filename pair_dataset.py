@@ -10,7 +10,7 @@ SUPPORTED_IMG_FORMATS = (".png", ".jpg", ".jpeg")
 class ContentStylePairDataset(Dataset):
   def __init__(self, args):
     super(Dataset, self).__init__()
-
+    self.style2 = args.style2
     if args.style.endswith(SUPPORTED_IMG_FORMATS):
       self.pairs_fn = [(args.content, args.style)]
     else:
@@ -31,9 +31,16 @@ class ContentStylePairDataset(Dataset):
     content = transforms.to_tensor(Image.open(pair[0]).convert("RGB"))
     style = transforms.to_tensor(Image.open(pair[1]).convert("RGB"))
 
-    return {
+    dic = {
       "content": content,
       "contentPath": pair[0],
       "style": style,
       "stylePath": pair[1],
     }
+
+    style2t = None
+    if self.style2 is not None:
+      style2t = transforms.to_tensor(Image.open(self.style2).convert("RGB"))
+      dic['style2'] = style2t
+    
+    return dic

@@ -15,15 +15,16 @@ def parse_args():
   parser = argparse.ArgumentParser(description="Style transfer using VGG19 and Wasserstein-based feature transforms")
   parser.add_argument("content", type=str, help="Path of the content image (must be .jpg or .png format)")
   parser.add_argument("style", type=str, help="Path of the style image (must be .jpg or .png format)")
-  parser.add_argument("method", choices=["wct", "gaussian", "gmmot-bary", "gmmot-rand"], help="Feature transform type to use for style transfer")
+  parser.add_argument("method", choices=["wct", "gaussian", "gmmot-bary", "gmmot-rand", "mean", "exact"], help="Feature transform type to use for style transfer")
+  parser.add_argument("--style2", type=str, help="Path of another style image (must be .jpg or .png format)")
   parser.add_argument("--out", type=str, default="outputs", help="Directory where stylized results will be saved (default: ./outputs/)")
   parser.add_argument("--alpha", type=float, default=0.2, help="Balance between the original content and stylized features (0 to 1, default: 0.2)")
-  parser.add_argument("--K", type=int, default=2, help="Number of Gaussian components for GMM-OT (default: 2)")
+  parser.add_argument("--K", type=str, default=2, help="Number of Gaussian components for GMM-OT (default: 2)")
   return parser.parse_args()
 
 def save_image(img, content_name, style_name, out_ext, args):
   alpha_str = f"{int(args.alpha * 100)}"
-  filename = f"{args.method}_{content_name}_{style_name}_alpha{alpha_str}_K{args.K}.{out_ext}"
+  filename = f"{args.method}_{content_name}_{style_name}_bary{args.style2 is not None}_alpha{alpha_str}_K{args.K}.{out_ext}"
   output_path = os.path.join(args.out, filename)
   torchvision.utils.save_image(
     img.cpu().detach().squeeze(0),
@@ -32,9 +33,13 @@ def save_image(img, content_name, style_name, out_ext, args):
 
 def main():
   args = parse_args()
+  if ',' in args.K:
+    args.K = list(map(int, (args.K).split(',')))
+  else:
+    args.K = [int(args.K)] * 5 
   os.makedirs(args.out, exist_ok=True)
 
-  #if not args.no_cuda and torch.cuda.is_available():
+  #if torch.cuda.is_available():
   #    device = 'cuda:0'
   #else:
   device = 'cpu'
@@ -50,26 +55,27 @@ def main():
   model.eval()
 
   for i, sample in enumerate(loader):
-    try:
-      log.info(f"Starting {i}/{len(loader)} stylization iteration")
-      log.info(f"content: {sample['contentPath']}\tstyle: {sample['stylePath']}")
+    log.info(f"Starting {i}/{len(loader)} stylization iteration")
+    log.info(f"content: {sample['contentPath']}\tstyle: {sample['stylePath']}")
 
-      s_basename, _ = os.path.splitext(os.path.basename(sample['stylePath'][0]))
-      s_basename = s_basename.strip(".")
-      c_basename, c_ext = os.path.splitext(os.path.basename(sample['contentPath'][0]))
-      c_basename = c_basename.strip(".")
+    s_basename, _ = os.path.splitext(os.path.basename(sample['stylePath'][0]))
+    s_basename = s_basename.strip(".")
+    c_basename, c_ext = os.path.splitext(os.path.basename(sample['contentPath'][0]))
+    c_basename = c_basename.strip(".")
 
-      content = sample['content'].to(device=args.device)
-      style = sample['style'].to(device=args.device)
+    content = sample['content'].to(device=args.device)
+    style = sample['style'].to(device=args.device)
+    if 'style2' in sample:
+      style2 = sample['style2'].to(device=args.device)
+    else:
+      style2 = None
 
-      start = timer()
-      out = model(content, style)
-      end = timer()
+    start = timer()
+    out = model(content, style, style2)
+    end = timer()
 
-      log.info(f"Wall-clock time for stylization: {end - start:.2f}s")
-      save_image(out, c_basename, s_basename, c_ext.strip("."), args)
-    except:
-      log.info(f"Exception caught.")
+    log.info(f"Wall-clock time for stylization: {end - start:.2f}s")
+    save_image(out, c_basename, s_basename, c_ext.strip("."), args)
 
   log.info("Stylization completed, exiting.")
 

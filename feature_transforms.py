@@ -1,13 +1,20 @@
+import random
 import torch
+import ot
 import ot.gmm
 import sklearn.mixture
+import numpy as np
 
-def style_transfer(method, alpha, cf, sf, K=None):
-    assert method in ('gmmot-bary', 'gmmot-rand', 'gaussian', 'wct')
+def style_transfer(method, alpha, cf, sf, sf2=None, K=None, level=None):
+    assert method in ('gmmot-bary', 'gmmot-rand', 'gaussian', 'wct', 'mean', 'exact')
     if 'gmmot' in method:
-        return gmm_transfer(alpha, cf, sf, method, K)
+        return gmm_transfer(alpha, cf, sf, method, K, level, sf2=sf2)
     elif method == 'gaussian':
         return gaussian_transfer(alpha, cf, sf)
+    elif method == 'mean':
+        return mean_transfer(alpha, cf, sf)
+    elif method == 'exact':
+        return exact_ot(alpha, cf, sf, level=level)
     else:
         return wct(alpha, cf, sf)
 
@@ -20,20 +27,44 @@ def sqrtm(M):
     v = v[..., above_cutoff]
     return (v * s.sqrt().unsqueeze(-2)) @ v.transpose(-2, -1)
 
-def gmm_transfer(alpha, cf, sf, method='gmmot-bary', K=1):
+def gmm_transfer(alpha, cf, sf, method='gmmot-bary', K=[2]*5, level=None, sf2=None):
     """Delon & Desolneux (2020). A Wasserstein-type distance in the space of Gaussian mixture models"""
-    cf, sf = cf.float(), sf.float()
+    cf, sf = cf.double(), sf.double()
     channels = cf.size(0)
     cfv, sfv = cf.view(channels, -1), sf.view(channels, -1) # c x (h x w)
-
-    # Fit gaussian mixtures (reg_covar is added to covariances' diagonals to ensure SDP)
-    c_gmm = sklearn.mixture.GaussianMixture(n_components=K, covariance_type='full', reg_covar=1e-3).fit(cfv.T)
-    s_gmm = sklearn.mixture.GaussianMixture(n_components=K, covariance_type='full', reg_covar=1e-3).fit(sfv.T)
-
-    # HACK: Convert GMM weights to torch Tensors
-    wc, mc, Cc = torch.tensor(c_gmm.weights_, dtype=torch.float), torch.tensor(c_gmm.means_, dtype=torch.float), torch.tensor(c_gmm.covariances_, dtype=torch.float) 
-    ws, ms, Cs = torch.tensor(s_gmm.weights_, dtype=torch.float), torch.tensor(s_gmm.means_, dtype=torch.float), torch.tensor(s_gmm.covariances_, dtype=torch.float)
+    if sf2 is not None:
+        sf2 = sf2.double()
+        sf2v = sf2.view(channels, -1)
     
+    Kval = K[level]
+    c_gmm = sklearn.mixture.GaussianMixture(n_components=Kval, covariance_type='full', reg_covar=1e-12).fit(cfv.T)
+    s_gmm = sklearn.mixture.GaussianMixture(n_components=Kval, covariance_type='full', reg_covar=1e-12).fit(sfv.T)
+    if sf2 is not None:
+        s2_gmm = sklearn.mixture.GaussianMixture(n_components=Kval, covariance_type='full', reg_covar=1e-12).fit(sf2v.T)
+        ws = torch.tensor(
+            np.concatenate([s_gmm.weights_*.5, s2_gmm.weights_*.5]), dtype=torch.double
+        )
+        ms = torch.tensor(
+            np.concatenate([s_gmm.means_, s2_gmm.means_]), dtype=torch.double
+        )
+        Cs = torch.tensor(
+            np.concatenate([s_gmm.covariances_, s2_gmm.covariances_]), dtype=torch.double
+        )
+        wc, mc, Cc = (
+            torch.tensor(np.concatenate([c_gmm.weights_*.5, c_gmm.weights_*.5]), dtype=torch.double),
+            torch.tensor(np.concatenate([c_gmm.means_, c_gmm.means_]), dtype=torch.double),
+            torch.tensor(np.concatenate([c_gmm.covariances_, c_gmm.covariances_]), dtype=torch.double),
+        )
+    else:
+        ws = torch.tensor(s_gmm.weights_, dtype=torch.double)
+        ms = torch.tensor(s_gmm.means_, dtype=torch.double)
+        Cs = torch.tensor(s_gmm.covariances_, dtype=torch.double)
+        wc, mc, Cc = (
+            torch.tensor(c_gmm.weights_, dtype=torch.double),
+            torch.tensor(c_gmm.means_, dtype=torch.double),
+            torch.tensor(c_gmm.covariances_, dtype=torch.double),
+        )
+
     # Apply transport map to content data
     method = 'rand' if 'rand' in method else 'bary'
     pushed = (ot.gmm.gmm_ot_apply_map(cfv.T, mc, ms, Cc, Cs, wc, ws, method=method).T).view_as(cf)
@@ -198,42 +229,3 @@ def wct(alpha, cf, sf):
 
     ccsf = alpha * cs0_features + (1.0 - alpha) * cf
     return ccsf.float().unsqueeze(0)
-
-def wct_mask(cf, sf):
-    cf = cf.double()
-    cf_sizes = cf.size()
-    c_mean = torch.mean(cf, 1)
-    c_mean = c_mean.unsqueeze(1).expand_as(cf)
-    cf -= c_mean
-
-    c_covm = torch.mm(cf, cf.t()).div(cf_sizes[1] - 1)
-    c_u, c_e, c_v = torch.svd(c_covm, some=False)
-
-    k_c = cf_sizes[0]
-    for i in range(cf_sizes[0]):
-        if c_e[i] < 0.00001:
-            k_c = i
-            break
-    c_d = (c_e[0:k_c]).pow(-0.5)
-    whitened = torch.mm(torch.mm(torch.mm(c_v[:, 0:k_c], torch.diag(c_d)), (c_v[:, 0:k_c].t())), cf)
-
-    sf = sf.double()
-    sf_sizes = sf.size()
-    sfv = sf.view(sf_sizes[0], sf_sizes[1] * sf_sizes[2])
-    s_mean = torch.mean(sfv, 1)
-    s_mean = s_mean.unsqueeze(1).expand_as(sfv)
-    sfv -= s_mean
-
-    s_covm = torch.mm(sfv, sfv.t()).div((sf_sizes[1] * sf_sizes[2]) - 1)
-    s_u, s_e, s_v = torch.svd(s_covm, some=False)
-
-    s_k = sf_sizes[0]
-    for i in range(sf_sizes[0]):
-        if s_e[i] < 0.00001:
-            s_k = i
-            break
-    s_d = (s_e[0:s_k]).pow(0.5)
-    ccsf = torch.mm(torch.mm(torch.mm(s_v[:, 0:s_k], torch.diag(s_d)), s_v[:, 0:s_k].t()), whitened)
-
-    ccsf += s_mean.resize_as_(ccsf)
-    return ccsf.float()
