@@ -72,6 +72,79 @@ def gaussian_transfer(alpha, cf, sf):
     res = (1-alpha) * cf + alpha * pushed
     return res.float().unsqueeze(0)
 
+def exact_ot(alpha, cf, sf, max_sampling=10000, level=None):
+    print(f'level: {level} / shape: {cf.shape}')
+    cf, sf = cf.double(), sf.double()
+    c_channels = cf.size(0)
+    cfv = cf.view(c_channels, -1)
+    sfv = sf.view(c_channels, -1)
+
+    # Check if sampling is needed
+    n_cf = cfv.size(1)
+    n_sf = sfv.size(1)
+    if n_cf > max_sampling or n_sf > max_sampling:
+        cf_indices = random.sample(range(n_cf), min(max_sampling, n_cf))
+        sf_indices = random.sample(range(n_sf), min(max_sampling, n_sf))
+        cfv_sampled = cfv[:, cf_indices]
+        sfv_sampled = sfv[:, sf_indices]
+    else:
+        cfv_sampled = cfv
+        sfv_sampled = sfv
+
+    cost_matrix = torch.cdist(cfv_sampled.T, sfv_sampled.T, p=2)
+
+    a = (torch.ones(cfv_sampled.size(1)) / cfv_sampled.size(1)).numpy()
+    b = (torch.ones(sfv_sampled.size(1)) / sfv_sampled.size(1)).numpy()
+
+    cost_matrix_np = cost_matrix.numpy()
+    ot_matrix = ot.emd(a, b, cost_matrix_np)
+    ot_matrix = torch.tensor(ot_matrix)
+
+    matched_indices = (ot_matrix.sum(dim=1) > 0).nonzero(as_tuple=True)[0]
+
+    # Find the closest matched point for each point in `a`
+    matched_points = cfv_sampled[:, matched_indices]
+    distances = torch.cdist(cfv_sampled.T, matched_points.T, p=2)
+    closest_matched_indices = distances.argmin(dim=1)
+
+    # Compute T(y) - y for each point in `a`
+    direction_vectors = torch.zeros_like(cfv_sampled)
+    for i, idx in enumerate(closest_matched_indices):
+        matched_row = ot_matrix[idx]
+        target_idx = matched_row.nonzero(as_tuple=True)[0]
+        if len(target_idx) > 0:
+            target_idx = target_idx[0].item()
+            y = cfv_sampled[:, i]
+            T_y = sfv_sampled[:, target_idx]
+            direction_vectors[:, i] = T_y - y
+
+    # Apply transformation
+    cfv_updated = cfv_sampled + alpha * direction_vectors
+
+    # Map updated cfv back to the original `cf` dimensions
+    if n_cf > max_sampling or n_sf > max_sampling:
+        updated_cfv_full = cfv.clone()
+        for i, idx in enumerate(cf_indices):
+            updated_cfv_full[:, idx] += alpha * direction_vectors[:, i]
+        cfv_updated = updated_cfv_full.view_as(cf)
+    else:
+        cfv_updated = cfv_updated.view_as(cf)
+
+    return cfv_updated.float().unsqueeze(0)
+
+def mean_transfer(alpha, cf, sf):
+    cf = cf.double()
+    c_channels = cf.size(0)
+    cfv = cf.view(c_channels, -1)
+    c_mean = torch.mean(cfv, 1)
+    c_mean = c_mean.unsqueeze(1).expand_as(cfv)
+    sf = sf.double()
+    sfv = sf.view(c_channels, -1)
+    s_mean = torch.mean(sfv, 1)
+    s_mean = s_mean.unsqueeze(1).expand_as(sfv)
+    pushed = (s_mean - c_mean + cfv).view_as(cf)
+    res = (1-alpha) * cf + alpha * pushed
+    return res.float().unsqueeze(0)
 
 def wct(alpha, cf, sf):
     """Li et al. (2017). Universal style transfer via feature transforms"""
