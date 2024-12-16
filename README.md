@@ -1,6 +1,8 @@
 # Deep Style Transfer
 
-Transfer the style of an image to a content image using VGG19 and different feature transform methods (Optimal Transport between Gaussian mixtures, between Gaussians, and Universal Style Transfer).
+Transfer the style of an image to a content image using VGG19 and different feature transform methods (Exact Optimal Transport, OT between Gaussian mixtures, between Gaussians, and Universal Style Transfer). [[demo!]](./results_exact/preview.html)
+
+![Demonstration](./results/wasserstein-ot.jpeg)
 
 Adaptation of [pietrocarbo/deep-transfer](https://github.com/pietrocarbo/deep-transfer) for Master MVA's [image processing](https://judelo.github.io/pages/mva-introduction-a-limagerie-numerique/) course project.
 
@@ -26,6 +28,7 @@ python main.py <content> <style> <method> [--out OUT] [--alpha ALPHA] [--K K]
 - `content`: Path to the content image (must be in `.jpg` or `.png` format).
 - `style`: Path to the style image (must be in `.jpg` or `.png` format).
 - `method`: Feature transform type to use for style transfer. Available methods:
+  - `exact`: Wasserstein Style Transfer
   - `wct`: Universal Style Transfer
   - `gaussian`: Gaussian-based feature transfer
   - `gmmot-bary`: GMM-OT barycentric map
@@ -47,20 +50,9 @@ applies the GMM-OT transform to apply `style2.jpg` to `content1.jpg` with a bala
 
 ## Results
 
-For a given (content, style) pair:
+(In columns) Gaussian, GMMOT(2), GMMOT(5) and Exact-OT :
+![](./results/gmmot.jpeg)
 
-![](./results/demo.png)
+Barycenters :
 
-WCT for many pairs:
-
-![](./results/wct.png)
-
-Gaussian-OT for many pairs:
-
-![](./results/gaussian.png)
-
-Barycentric GMM-OT for `K=5` gaussian components:
-
-![](./results/gmmot-bary-K5.png)
-
-To be added: Barycentric & random GMM-OT for `K=5` and `K=10`.
+![](./results/barycenters.jpeg)

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wasserstein Style Transfer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .controls {
+            display: inline-block;
+            margin: 20px;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .slider-value {
+            display: inline-block;
+            width: 40px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Wasserstein Style Transfer</h1>
+    <div class="container">
+        <div class="controls">
+            <h3>Image 1</h3>
+            <label for="content1">Content:</label>
+            <select id="content1">
+                <option value="flowers" selected>Flowers</option>
+                <option value="desert">Desert</option>
+                <option value="volcano">Volcano</option>
+                <option value="paris">Paris</option>
+            </select>
+
+            <label for="style1">Style:</label>
+            <select id="style1">
+                <option value="hokusai" selected>Hokusai</option>
+                <option value="water">Water</option>
+                <option value="painting">Painting</option>
+                <option value="tiger">Tiger</option>
+            </select>
+
+            <label for="alpha1">Alpha: <span id="alpha-value1" class="slider-value">60</span></label>
+            <input type="range" id="alpha1" min="0" max="100" step="20" value="60">
+        </div>
+
+        <div class="controls">
+            <h3>Image 2</h3>
+            <label for="content2">Content:</label>
+            <select id="content2">
+                <option value="flowers">Flowers</option>
+                <option value="desert">Desert</option>
+                <option value="volcano" selected>Volcano</option>
+                <option value="paris">Paris</option>
+            </select>
+
+            <label for="style2">Style:</label>
+            <select id="style2">
+                <option value="hokusai" selected>Hokusai</option>
+                <option value="water">Water</option>
+                <option value="painting">Painting</option>
+                <option value="tiger">Tiger</option>
+            </select>
+
+            <label for="alpha2">Alpha: <span id="alpha-value2" class="slider-value">60</span></label>
+            <input type="range" id="alpha2" min="0" max="100" step="20" value="60">
+        </div>
+    </div>
+
+    <div class="container">
+        <div>
+            <img id="first-image" src="" alt="First Image">
+        </div>
+        <div>
+            <img id="second-image" src="" alt="Second Image">
+        </div>
+    </div>
+
+    <script>
+        function loadImages() {
+            const content1 = document.getElementById("content1").value;
+            const style1 = document.getElementById("style1").value;
+            const alpha1 = document.getElementById("alpha1").value;
+            let imagePath1 = "";
+            if (alpha1 == 0) {
+                imagePath1 = `${content1}.jpeg`;
+            } else if (alpha1 == 100) {
+                imagePath1 = `${style1}.jpeg`;
+            } else {
+                imagePath1 = `${content1}_${style1}_${alpha1}.jpeg`;
+            }
+            
+            const content2 = document.getElementById("content2").value;
+            const style2 = document.getElementById("style2").value;
+            const alpha2 = document.getElementById("alpha2").value;
+            
+            let imagePath2 = "";
+            if (alpha2 == 0) {
+                imagePath2 = `${content2}.jpeg`;
+            } else if (alpha2 == 100) {
+                imagePath2 = `${style2}.jpeg`;
+            } else {
+                imagePath2 = `${content2}_${style2}_${alpha2}.jpeg`;
+            }
+
+            document.getElementById("first-image").src = imagePath1;
+            document.getElementById("first-image").alt = `Image: ${imagePath1}`;
+            
+            document.getElementById("second-image").src = imagePath2;
+            document.getElementById("second-image").alt = `Image: ${imagePath2}`;
+        }
+
+        function updateControls(alphaInput, contentSelect, styleSelect) {
+            const alphaValue = parseInt(alphaInput.value, 10);
+            if (alphaValue === 0) {
+                styleSelect.disabled = true;
+            } else {
+                styleSelect.disabled = false;
+            }
+            
+            if (alphaValue === 100) {
+                contentSelect.disabled = true;
+            } else {
+                contentSelect.disabled = false;
+            }
+        }
+
+        document.getElementById("alpha1").addEventListener("input", function() {
+            document.getElementById("alpha-value1").innerText = this.value;
+            updateControls(this, document.getElementById("content1"), document.getElementById("style1"));
+            loadImages();
+        });
+
+        document.getElementById("alpha2").addEventListener("input", function() {
+            document.getElementById("alpha-value2").innerText = this.value;
+            updateControls(this, document.getElementById("content2"), document.getElementById("style2"));
+            loadImages();
+        });
+
+        document.getElementById("content1").addEventListener("change", loadImages);
+        document.getElementById("style1").addEventListener("change", loadImages);
+        document.getElementById("content2").addEventListener("change", loadImages);
+        document.getElementById("style2").addEventListener("change", loadImages);
+
+        window.onload = loadImages;
+    </script>
+</body>
+</html>
