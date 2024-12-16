@@ -1,6 +1,6 @@
 # Deep Style Transfer
 
-Transfer the style of an image to a content image using VGG19 and different feature transform methods (Exact Optimal Transport, OT between Gaussian mixtures, between Gaussians, and Universal Style Transfer). [[demo!]](./results_exact/preview.html)
+Transfer the style of an image to a content image using VGG19 and different feature transform methods (Exact Optimal Transport, OT between Gaussian mixtures, between Gaussians, and Universal Style Transfer). [[demo!]](https://samuelbx.github.io/experiments/wst.html)
 
 ![Demonstration](./results/wasserstein-ot.jpeg)
 
